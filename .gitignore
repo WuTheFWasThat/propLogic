@@ -1,0 +1,11 @@
+# compiled files
+*.hi
+*.o
+propositionalLogic
+
+# sandbox stuff
+.cabal-sandbox/
+cabal.sandbox.config
+
+# cabal installation artifact?
+dist
