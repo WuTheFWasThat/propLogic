@@ -4,6 +4,9 @@ import Data.Foldable (toList)
 import qualified Data.Maybe as Maybe
 import Data.List (intercalate)
 
+prop :: String -> Prop.Expr
+prop = either (error "Failed to parse!") id . Prop.parseExpr ""
+
 data Sequent = Sequent {
   antecedent :: Sequence.Seq Prop.Expr
   , consequent :: Sequence.Seq Prop.Expr
@@ -20,75 +23,55 @@ class Rule r where
   apply :: r -> Sequent -> Maybe (Sequence.Seq Sequent)
 
 -- reference: http://logitext.mit.edu/tutorial
---
+--            (the rules there have up and down flipped)
 -- notation:
 -- A, B, C are propositions,
 -- X, Y, Z are groups of them
 --
--- terminates a branch:
---   X, A |- A, Y
---
 -- RULES:
---   leftNot
---     X, ~A |- Y
---     X |- A, Y
 --
---   rightNot
---     X |- ~A, Y
---     X, A |- Y
+--       termination      X, A |- A, Y
+--                        ------------
 --
---   leftAnd
---     X, A /\ B |- Y
---     X, A, B |- Y
+--             X, ~A |- Y                      X |- ~A, Y
+--  leftNot    ------------         rightNot   ------------
+--             X |- A, Y                       X, A |- Y
 --
---   rightAnd
---     X |- A /\ B, Y
---     X |- A, Y
---     X |- B, Y
+--             X, A /\ B |- Y                  X |- A /\ B, Y
+--  leftAnd    ----------------     rightAnd   ----------------
+--             X, A, B |- Y                    X |- A, Y
+--                                             X |- B, Y
 --
---   leftOr
---     X, A \/ B |- Y
---     X, A |- Y
---     X, B |- Y
---
---   rightOr
---     X |- A /\ B, Y
---     X |- A, B, Y
+--             X, A \/ B |- Y                  X |- A /\ B, Y
+--  leftOr     ----------------     rightOr    ----------------
+--             X, A |- Y                       X |- A, B, Y
+--             X, B |- Y
 --
 -- (optional rules, in classical logic.  but not in intuitionist?  i think)
 --
---   leftImply
---     X, A -> B |- Y
---     X |- A, Y
---     X, B |- Y
+--             X, A -> B |- Y                   X |- A -> B, Y
+--  leftImply  ----------------     rightImply ----------------
+--             X |- A, Y                        X, A |- B, Y
+--             X, B |- Y
 --
---   rightImply
---     X |- A -> B, Y
---     X, A |- B, Y
+-- optional (assuming cut elimination theorem applies, as it typically will)
 --
--- cut rule!
---
---   cut
---     X, Y |- A, Z
---     X |- B
---     Y, B |- A, Z
+--                        X, Y |- A, Z
+--              cut!      ----------------
+--                        X |- B
+--                        Y, B |- A, Z
 
 data LeftOr = LeftOr {
   leftOrIndex :: Int
 }
-
-splitOr :: Prop.Expr -> Maybe (Prop.Expr, Prop.Expr)
-splitOr (Prop.Disjunction x y) = Just (x, y)
-splitOr _ = Nothing
 
 -- NOTE: should make this less ugly
 --       i know you're supposed to use the zipper pattern: http://learnyouahaskell.com/zippers
 --       or maybe a lens: https://www.schoolofhaskell.com/school/to-infinity-and-beyond/pick-of-the-week/a-little-lens-starter-tutorial
 instance Rule LeftOr where
   apply leftOr seq =
-    case (splitOr expr) of
-      Nothing -> Nothing
-      Just (leftExpr, rightExpr) -> Just $ Sequence.fromList
+    case expr of
+      Prop.Disjunction leftExpr rightExpr -> Just $ Sequence.fromList
         [ (Sequent {
              antecedent=(Sequence.update index leftExpr (antecedent seq))
              , consequent=(consequent seq)
@@ -98,27 +81,27 @@ instance Rule LeftOr where
              , consequent=(consequent seq)
           })
         ]
+      _ -> Nothing
     where
       index = leftOrIndex leftOr
       expr = Sequence.index (antecedent seq) index
-
--- TODO: make function to parse sequent from something like:
--- prop, prop2, prop3 |- prop4, prop5, prop6
 
 main :: IO ()
 main =
   do
     let s = Sequent {
-        antecedent = Sequence.fromList
-        [ Prop.Disjunction (Prop.Variable $ Prop.Var 'a') (Prop.Conjunction (Prop.Variable $ Prop.Var 'b') (Prop.Variable $ Prop.Var 'c'))
-        , Prop.Negation (Prop.Variable $ Prop.Var 'x')
-        ]
-        , consequent = Sequence.fromList
-        [ Prop.Disjunction (Prop.Variable $ Prop.Var 'x') (Prop.Variable $ Prop.Var 'a')
-        ]
+        antecedent = Sequence.fromList [ prop "( a | ( b & c ))" , prop "~x" ]
+        , consequent = Sequence.fromList [ prop "( x | a )" ]
       } in do
         putStrLn "leftOr(0) application example:"
         putStrLn ""
         putStrLn . show $ s
         putStrLn "------------------------------------------------------"
         putStrLn $ intercalate "       " $ map show $ toList . Maybe.fromJust $ apply (LeftOr {leftOrIndex= 0}) s
+        putStrLn ""
+        putStrLn ""
+        putStrLn "leftOr(1) fails:"
+        putStrLn ""
+        putStrLn . show $ s
+        putStrLn "------------------------------------------------------"
+        putStrLn . show $ apply (LeftOr {leftOrIndex= 1}) s
