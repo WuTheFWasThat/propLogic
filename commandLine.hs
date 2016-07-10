@@ -9,4 +9,4 @@ stringAsExpression input = case Prop.parseExpr "" input of
 main :: IO ()
 main = do
   System.IO.putStr "Please enter a proposition: "
-  System.IO.interact stringAsExpression
+  System.IO.interact (unlines . map stringAsExpression . lines)
