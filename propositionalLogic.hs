@@ -1,10 +1,20 @@
 import qualified Data.Logic.Propositional as Prop
 import qualified Data.Sequence as Sequence
+import Data.Foldable (toList)
+import qualified Data.Maybe as Maybe
+import Data.List (intercalate)
 
 data Sequent = Sequent {
   antecedent :: Sequence.Seq Prop.Expr
   , consequent :: Sequence.Seq Prop.Expr
-} deriving (Show)
+}
+
+instance Show Sequent where
+  show seq = let
+      antecedentStr = intercalate " , " $ map show $ toList $ antecedent seq
+      consequentStr = intercalate " , " $ map show $ toList $ consequent seq
+    in
+      antecedentStr ++ " |- " ++ consequentStr
 
 class Rule r where
   apply :: r -> Sequent -> Maybe (Sequence.Seq Sequent)
@@ -55,6 +65,13 @@ class Rule r where
 --   rightImply
 --     X |- A -> B, Y
 --     X, A |- B, Y
+--
+-- cut rule!
+--
+--   cut
+--     X, Y |- A, Z
+--     X |- B
+--     Y, B |- A, Z
 
 data LeftOr = LeftOr {
   leftOrIndex :: Int
@@ -91,18 +108,17 @@ instance Rule LeftOr where
 main :: IO ()
 main =
   do
-    putStrLn "Hello World"
-    putStrLn . show $ Sequent (Sequence.fromList []) (Sequence.fromList [])
-
     let s = Sequent {
         antecedent = Sequence.fromList
         [ Prop.Disjunction (Prop.Variable $ Prop.Var 'a') (Prop.Conjunction (Prop.Variable $ Prop.Var 'b') (Prop.Variable $ Prop.Var 'c'))
         , Prop.Negation (Prop.Variable $ Prop.Var 'x')
         ]
         , consequent = Sequence.fromList
-        [ Prop.Disjunction (Prop.Variable $ Prop.Var 'a') (Prop.Conjunction (Prop.Variable $ Prop.Var 'b') (Prop.Variable $ Prop.Var 'c'))
-        , Prop.Negation (Prop.Variable $ Prop.Var 'x')
+        [ Prop.Disjunction (Prop.Variable $ Prop.Var 'x') (Prop.Variable $ Prop.Var 'a')
         ]
       } in do
+        putStrLn "leftOr(0) application example:"
+        putStrLn ""
         putStrLn . show $ s
-        putStrLn . show $ apply (LeftOr {leftOrIndex= 0}) s
+        putStrLn "------------------------------------------------------"
+        putStrLn $ intercalate "       " $ map show $ toList . Maybe.fromJust $ apply (LeftOr {leftOrIndex= 0}) s
