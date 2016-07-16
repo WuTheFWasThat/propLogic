@@ -2,6 +2,7 @@
 *.hi
 *.o
 propositionalLogic
+commandLine
 
 # sandbox stuff
 .cabal-sandbox/
