@@ -1,3 +1,5 @@
+-- A command line interface for interacting with propLogic. Currently
+-- only supports displaying a parsed expression.
 import qualified System.IO
 import qualified Data.Logic.Propositional as Prop
 
