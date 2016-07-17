@@ -4,23 +4,17 @@ import Data.Foldable (toList)
 import qualified Data.Maybe as Maybe
 import Data.List (intercalate)
 
-prop :: String -> Prop.Expr
-prop = either (error "Failed to parse!") id . Prop.parseExpr ""
+type ClauseSet = [Prop.Expr]
 
-data Sequent = Sequent {
-  antecedent :: Sequence.Seq Prop.Expr
-  , consequent :: Sequence.Seq Prop.Expr
-}
+data Sequent = Sequent ClauseSet ClauseSet
 
 instance Show Sequent where
-  show seq = let
-      antecedentStr = intercalate " , " $ map show $ toList $ antecedent seq
-      consequentStr = intercalate " , " $ map show $ toList $ consequent seq
-    in
-      antecedentStr ++ " |- " ++ consequentStr
+  show (Sequent antecedent consequent) =
+    let antecedentStr = intercalate " , " $ map show $ antecedent
+        consequentStr = intercalate " , " $ map show $ consequent
+    in antecedentStr ++ " |- " ++ consequentStr
 
-class Rule r where
-  apply :: r -> Sequent -> Maybe (Sequence.Seq Sequent)
+type Rule = Sequent -> Maybe [Sequent]
 
 -- reference: http://logitext.mit.edu/tutorial
 --            (the rules there have up and down flipped)
@@ -60,48 +54,41 @@ class Rule r where
 --              cut!      ----------------
 --                        X |- B
 --                        Y, B |- A, Z
-
-data LeftOr = LeftOr {
-  leftOrIndex :: Int
-}
-
--- NOTE: should make this less ugly
---       i know you're supposed to use the zipper pattern: http://learnyouahaskell.com/zippers
---       or maybe a lens: https://www.schoolofhaskell.com/school/to-infinity-and-beyond/pick-of-the-week/a-little-lens-starter-tutorial
-instance Rule LeftOr where
-  apply leftOr seq =
-    case expr of
-      Prop.Disjunction leftExpr rightExpr -> Just $ Sequence.fromList
-        [ (Sequent {
-             antecedent=(Sequence.update index leftExpr (antecedent seq))
-             , consequent=(consequent seq)
-          })
-        , (Sequent {
-             antecedent=(Sequence.update index rightExpr (antecedent seq))
-             , consequent=(consequent seq)
-          })
-        ]
+leftNot :: Rule
+leftNot (Sequent antecedent consequent) =
+    case antecedent of
+      (Prop.Negation a) : x -> Just [Sequent x (a : consequent)]
       _ -> Nothing
-    where
-      index = leftOrIndex leftOr
-      expr = Sequence.index (antecedent seq) index
+
+leftAnd :: Rule
+leftAnd (Sequent antecedent consequent) =
+    case antecedent of
+      (Prop.Conjunction a b) : x -> Just [Sequent (a : b : x) consequent]
+      _ -> Nothing
+
+leftOr :: Rule
+leftOr (Sequent antecedent consequent) =
+    case antecedent of
+      (Prop.Disjunction a b) : x -> Just [seq1, seq2]
+        where seq1 = Sequent (a : x) consequent
+              seq2 = Sequent (b : x) consequent
+      _ -> Nothing
+
+prop :: String -> Prop.Expr
+prop = either (error "Failed to parse!") id . Prop.parseExpr ""
 
 main :: IO ()
-main =
-  do
-    let s = Sequent {
-        antecedent = Sequence.fromList [ prop "( a | ( b & c ))" , prop "~x" ]
-        , consequent = Sequence.fromList [ prop "( x | a )" ]
-      } in do
-        putStrLn "leftOr(0) application example:"
-        putStrLn ""
-        putStrLn . show $ s
-        putStrLn "------------------------------------------------------"
-        putStrLn $ intercalate "       " $ map show $ toList . Maybe.fromJust $ apply (LeftOr {leftOrIndex= 0}) s
-        putStrLn ""
-        putStrLn ""
-        putStrLn "leftOr(1) fails:"
-        putStrLn ""
-        putStrLn . show $ s
-        putStrLn "------------------------------------------------------"
-        putStrLn . show $ apply (LeftOr {leftOrIndex= 1}) s
+main = do
+    let antecedent = [ prop "( a & ( b & c ))" , prop "~x" ]
+    let consequent = [ prop "( x | a)" ]
+    let s = Sequent antecedent consequent
+    putStrLn "Sequent:"
+    putStrLn . show $ s
+    putStrLn ""
+    putStrLn "leftOr application:"
+    putStrLn ""
+    putStrLn . show $ leftOr $ s
+    putStrLn ""
+    putStrLn "leftAnd application:"
+    putStrLn ""
+    putStrLn . show $ leftAnd $ s
